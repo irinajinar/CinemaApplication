@@ -43,7 +43,7 @@ public class MovieRepository: IMovieRepository
         return movies;
     }
 
-    public async Task<Movie> UpdateMovieAsync(Guid movieId, Movie updatedMovie)
+    public async Task<Movie?> UpdateMovieAsync(Guid movieId, Movie updatedMovie)
     {
         var movie = await _dataAppContext.Movies.FindAsync(movieId);
         if (movie == null)
@@ -53,6 +53,7 @@ public class MovieRepository: IMovieRepository
 
         movie.Name = updatedMovie.Name;
         movie.Description = updatedMovie.Description;
+        movie.Year = updatedMovie.Year;
         await _dataAppContext.SaveChangesAsync();
         return movie;
     }
