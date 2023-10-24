@@ -1,6 +1,6 @@
 namespace Domain.Exceptions;
 
-public class MultiValidationException: Exception
+public class MultiValidationException : Exception
 {
     public List<string> ValidationErrors { get; }
 

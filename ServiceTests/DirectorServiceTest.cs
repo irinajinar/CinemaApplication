@@ -8,7 +8,7 @@ using FluentAssertions;
 using Moq;
 using Xunit;
 
-namespace ServiceTests;
+namespace MovieServiceTests;
 
 public class DirectorServiceTest
 {
@@ -128,7 +128,7 @@ public class DirectorServiceTest
 
         directorRepositoryMock
             .Setup(repo => repo.DeleteDirectorAsync(directorId))
-            .ReturnsAsync(false); 
+            .ReturnsAsync(false);
 
         // Act and Assert
         await Assert.ThrowsAsync<MultiValidationException>(() => directorService.DeleteDirectorAsync(directorId));

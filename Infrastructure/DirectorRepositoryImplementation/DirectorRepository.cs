@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.DirectorRepositoryImplementation;
 
-public class DirectorRepository:IDirectorRepository
+public class DirectorRepository : IDirectorRepository
 {
     private readonly DataAppContext _dataAppContext;
 
@@ -22,7 +22,7 @@ public class DirectorRepository:IDirectorRepository
 
     public async Task<Director> GetByIdAsync(Guid directorId)
     {
-       return (await _dataAppContext.Directors.FindAsync(directorId))!;
+        return (await _dataAppContext.Directors.FindAsync(directorId))!;
     }
 
     public async Task<bool> DeleteDirectorAsync(Guid directorId)

@@ -2,17 +2,10 @@ namespace ClassLibrary1.BodyRequest;
 
 public class MovieBodyRequest
 {
-    public MovieBodyRequest(string name, string description)
-    {
-        Name = name;
-        Description = description;
-    }
-
-    public MovieBodyRequest()
-    {
-        
-    }
-
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string Name { get; set; } = null!;
+    public string Description { get; set; } = null!;
+    public int Year { get; set; }
+    public Guid DirectorId { get; set; }
+    public List<ActorBodyRequest> ActorsToAdd { get; set; } = new List<ActorBodyRequest>();
+    public List<Guid> ActorsToRemove { get; set; } = new List<Guid>();
 }
