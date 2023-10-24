@@ -1,5 +1,4 @@
 using ClassLibrary1.BodyRequest;
-using ClassLibrary1.Dtos;
 using ClassLibrary1.RepositoryInterfaces;
 using ClassLibrary1.Responses;
 using ClassLibrary1.ServiceInterface;
@@ -12,32 +11,35 @@ public class MovieService : IMovieService
 {
     private readonly IMovieRepository _movieRepository;
     private readonly IDirectorRepository _directorRepository;
+    private readonly IActorRepository _actorRepository;
 
-    public MovieService(IMovieRepository movieRepository, IDirectorRepository directorRepository)
+    public MovieService(IMovieRepository movieRepository, IDirectorRepository directorRepository,
+        IActorRepository actorRepository)
     {
         _movieRepository = movieRepository;
         _directorRepository = directorRepository;
+        _actorRepository = actorRepository;
     }
 
-    public async Task<MovieResponse> CreateMovieAsync(MovieDto movieDto)
+    public async Task<MovieResponse> CreateMovieAsync(MovieWithActorsRequest movieRequest)
     {
         var validationErrors = new List<string>();
-        if (string.IsNullOrWhiteSpace(movieDto.Name))
+        if (string.IsNullOrWhiteSpace(movieRequest.Name))
         {
             validationErrors.Add("Name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(movieDto.Description))
+        if (string.IsNullOrWhiteSpace(movieRequest.Description))
         {
             validationErrors.Add("Description is required.");
         }
 
-        if (movieDto.Year <= 0 || movieDto.Year > DateTime.Now.Year)
+        if (movieRequest.Year <= 0 || movieRequest.Year > DateTime.Now.Year)
         {
             validationErrors.Add("Year must be a valid positive year up to the current year.");
         }
 
-        if (movieDto.DirectorId == Guid.Empty)
+        if (movieRequest.DirectorId == Guid.Empty)
         {
             validationErrors.Add("Director Id is required.");
         }
@@ -47,57 +49,76 @@ public class MovieService : IMovieService
             throw new MultiValidationException(validationErrors);
         }
 
-        var newMovie = new Movie(Guid.NewGuid(), movieDto.Name, movieDto.Description, movieDto.Year);
-        Director director = await _directorRepository.GetByIdAsync(movieDto.DirectorId);
+        var newMovie = new Movie(Guid.NewGuid(), movieRequest.Name, movieRequest.Description, movieRequest.Year);
+        Director director = await _directorRepository.GetByIdAsync(movieRequest.DirectorId);
         if (director == null)
         {
-            throw new MultiValidationException("Director not found. You have to Add the Director first!");
+            throw new MultiValidationException("Director not found. You have to add the Director first!");
         }
 
         newMovie.DirectorId = director.Id;
+
+        var actors = new List<Actor>();
+        foreach (var actorRequest in movieRequest.Actors)
+        {
+            var existingActor = await _actorRepository.GetByIdAsync(actorRequest.Id);
+
+            if (existingActor != null)
+            {
+                actors.Add(existingActor);
+            }
+            else
+            {
+                var actor = new Actor(Guid.NewGuid(), actorRequest.Name, actorRequest.Age, actorRequest.Country!,
+                    actorRequest.Biography!);
+                actors.Add(actor);
+            }
+        }
+
+        newMovie.Actors = actors!;
         await _movieRepository.AddMovieAsync(newMovie);
-        var directorName = director.Name;
-        return new MovieResponse(newMovie.Id, newMovie.Name, newMovie.Description, newMovie.Year, newMovie.DirectorId);
+
+        var movieResponse = new MovieResponse(newMovie, newMovie.DirectorId, includeActors: true);
+        return movieResponse;
     }
 
     public async Task<MovieResponse> GetByIdAsync(Guid movieId)
     {
-        var movie = await _movieRepository.GetByIdAsync(movieId);
+        var movie = await _movieRepository.GetMovieWithActorsAsync(movieId);
         if (movie == null)
         {
             throw new MultiValidationException($"The movie with the {movieId} not found");
         }
 
-        return new MovieResponse(
-            movie.Id,
-            movie.Name,
-            movie.Description,
-            movie.Year,
-            movie.DirectorId
-        );
+        var movieResponse = new MovieResponse(movie, movie.DirectorId, includeActors: true);
+
+        return movieResponse;
     }
 
     public async Task<List<MovieResponse>> GetAllMoviesAsync(string? filterByName = null)
     {
         var movies = await _movieRepository.GetAllMoviesAsync();
+
         if (!string.IsNullOrEmpty(filterByName))
         {
-            movies = movies.Where(movies => movies.Name.Contains(filterByName, StringComparison.OrdinalIgnoreCase))
+            movies = movies.Where(movie => movie!.Name.Contains(filterByName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
-        var movieResponses = movies.Select(movie => new MovieResponse(
-            movie.Id,
-            movie.Name,
-            movie.Description,
-            movie.Year,
-            movie.DirectorId)).ToList();
+        var movieResponses = movies.Select(movie =>
+        {
+            var movieResponse = new MovieResponse(movie, movie!.DirectorId, includeActors: true);
+
+
+            return movieResponse;
+        }).ToList();
+
         return movieResponses;
     }
 
     public async Task<MovieResponse> UpdateMovieAsync(Guid movieId, MovieBodyRequest movieBodyRequest)
     {
-        var existingMovie = await _movieRepository.GetByIdAsync(movieId);
+        var existingMovie = await _movieRepository.GetMovieWithActorsAsync(movieId);
         if (existingMovie == null)
         {
             throw new MultiValidationException("Movie not found");
@@ -105,38 +126,67 @@ public class MovieService : IMovieService
 
         existingMovie.Name = movieBodyRequest.Name;
         existingMovie.Description = movieBodyRequest.Description;
-        var updatedMovie = await _movieRepository.UpdateMovieAsync(movieId, existingMovie);
-        if (updatedMovie == null)
+        existingMovie.Year = movieBodyRequest.Year;
+      //  existingMovie.DirectorId = movieBodyRequest.DirectorId;
+
+        foreach (var actorIdToRemove in movieBodyRequest.ActorsToRemove)
         {
-            throw new MultiValidationException("Failed to update the movie.");
+            var actorToRemove = existingMovie.Actors.FirstOrDefault(a => a!.Id == actorIdToRemove);
+            if (actorToRemove != null)
+            {
+                existingMovie.Actors.Remove(actorToRemove);
+            }
+            else
+            {
+                throw new MultiValidationException(
+                    $"The actor with ID {actorIdToRemove} was not found in the movie's actor list.");
+            }
         }
 
-        return new MovieResponse(updatedMovie.Id, updatedMovie.Name, updatedMovie.Description, updatedMovie.Year,
-            updatedMovie.DirectorId);
+        foreach (var actorDto in movieBodyRequest.ActorsToAdd)
+        {
+            if (!string.IsNullOrWhiteSpace(actorDto.Name))
+            {
+                var existingActor = existingMovie.Actors.FirstOrDefault(a => a!.Id == actorDto.Id);
+
+                if (existingActor == null)
+                {
+                    // The actor is not already in the collection, so add it.
+                    existingActor = await _actorRepository.GetByIdAsync(actorDto.Id);
+
+                    if (existingActor != null)
+                    {
+                        existingMovie.Actors.Add(existingActor);
+                    }else
+                    {
+                        // If the actor doesn't exist, create a new one and add it.
+                        var newActor = new Actor(Guid.NewGuid(), actorDto.Name, actorDto.Age, actorDto.Country, actorDto.Biography);
+                        existingMovie.Actors.Add(newActor);
+                    }
+                }
+            }
+        }
+
+        await _movieRepository.UpdateMovieAsync(movieId, existingMovie);
+
+        var updatedMovieResponse = new MovieResponse(existingMovie, existingMovie.DirectorId, includeActors: true);
+
+        return updatedMovieResponse;
     }
+
 
     public async Task DeleteAsync(Guid movieId)
     {
-        var movie = await _movieRepository.GetByIdAsync(movieId);
+        await _movieRepository.GetByIdAsync(movieId);
 
-        if (movie == null)
-        {
-            return;
-        }
-
-        var isDeleted = await _movieRepository.DeleteMovieAsync(movieId);
-
-        if (!isDeleted)
-        {
-            throw new MultiValidationException("Failed to delete the movie.");
-        }
+        await _movieRepository.DeleteMovieAsync(movieId);
     }
 
     public async Task<DeleteManyResponse> DeleteMoviesAsync(List<string> movieIds)
     {
         var isDeleted = await _movieRepository.DeleteMoviesAsync(movieIds);
 
-        string message = isDeleted ? "Deleted all movies." : "No movies were deleted.";
+        var message = isDeleted ? "Deleted all movies." : "No movies were deleted.";
 
         return new DeleteManyResponse(message);
     }

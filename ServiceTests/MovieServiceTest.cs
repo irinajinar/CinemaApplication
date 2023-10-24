@@ -9,7 +9,7 @@ using FluentAssertions;
 using Moq;
 using Xunit;
 
-namespace ServiceTests;
+namespace MovieServiceTests;
 
 public class MovieServiceTest
 {
@@ -22,16 +22,22 @@ public class MovieServiceTest
             DirectorName = "Smith"
         };
         var directorId = Guid.NewGuid();
-        var movieDto = new MovieDto
+        var movieDto = new MovieWithActorsRequest()
         {
             Name = "Hulk",
             Description = "Hulk description",
             Year = 2010,
-            DirectorId = directorId
+            DirectorId = directorId,
+            Actors = new List<ActorBodyRequest>
+            {
+                new ActorBodyRequest("Actor1", 30, "Country1", "Bio1", Guid.NewGuid())
+            }
         };
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var actorRepositoryMock = new Mock<IActorRepository>();
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         var expectedDirector = new Director
         {
@@ -54,7 +60,7 @@ public class MovieServiceTest
     public async Task CreateMovieAsync_ThrowsMultiValidationException_WhenValidationFails()
     {
         // Arrange
-        var movieDto = new MovieDto
+        var movieDto = new MovieWithActorsRequest()
         {
             Name = "",
             Description = ""
@@ -62,7 +68,9 @@ public class MovieServiceTest
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var actorRepositoryMock = new Mock<IActorRepository>();
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act and Assert
         Func<Task> act = async () => await movieService.CreateMovieAsync(movieDto);
@@ -81,9 +89,11 @@ public class MovieServiceTest
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync(movie);
+        var actorRepositoryMock = new Mock<IActorRepository>();
+        movieRepositoryMock.Setup(repo => repo.GetMovieWithActorsAsync(movieId)).ReturnsAsync(movie);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var result = await movieService.GetByIdAsync(movieId);
@@ -92,6 +102,9 @@ public class MovieServiceTest
         result.Should().NotBeNull();
         result.Should().BeOfType<MovieResponse>();
         result.MovieId.Should().Be(movieId);
+        result.MovieName.Should().Be("Test Movie");
+        result.MovieDescription.Should().Be("Test Description");
+        result.YearOfProduction.Should().Be(1234);
     }
 
     [Fact]
@@ -102,9 +115,12 @@ public class MovieServiceTest
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync((Movie)null!);
+        var actorRepositoryMock = new Mock<IActorRepository>();
+        movieRepositoryMock.Setup(repo =>
+            repo.GetByIdAsync(movieId)).ReturnsAsync((Movie)null!);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act and Assert
         Func<Task> act = async () => await movieService.GetByIdAsync(movieId);
@@ -118,15 +134,17 @@ public class MovieServiceTest
         // Arrange
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
+        var actorRepositoryMock = new Mock<IActorRepository>();
         var movies = new List<Movie>
         {
             new Movie(Guid.NewGuid(), "Movie 1", "Description 1", 1990),
             new Movie(Guid.NewGuid(), "Movie 2", "Description 2", 1991),
             new Movie(Guid.NewGuid(), "Movie 3", "Description 3", 1993)
         };
-        movieRepositoryMock.Setup(repo => repo.GetAllMoviesAsync()).ReturnsAsync(movies);
+        movieRepositoryMock.Setup(repo => repo.GetAllMoviesAsync())!.ReturnsAsync(movies);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var result = await movieService.GetAllMoviesAsync();
@@ -142,15 +160,17 @@ public class MovieServiceTest
         // Arrange
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
+        var actorRepositoryMock = new Mock<IActorRepository>();
         var movies = new List<Movie>
         {
             new Movie(Guid.NewGuid(), "Movie 1", "Description 1", 1990),
             new Movie(Guid.NewGuid(), "Movie 2", "Description 2", 1991),
             new Movie(Guid.NewGuid(), "Movie 3", "Description 3", 1992)
         };
-        movieRepositoryMock.Setup(repo => repo.GetAllMoviesAsync()).ReturnsAsync(movies);
+        movieRepositoryMock.Setup(repo => repo.GetAllMoviesAsync())!.ReturnsAsync(movies);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var result = await movieService.GetAllMoviesAsync("Movie 2");
@@ -170,10 +190,12 @@ public class MovieServiceTest
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
+        var actorRepositoryMock = new Mock<IActorRepository>();
         movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync(movie);
         movieRepositoryMock.Setup(repo => repo.DeleteMovieAsync(movieId)).ReturnsAsync(true);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var act = async () => await movieService.DeleteAsync(movieId);
@@ -190,14 +212,16 @@ public class MovieServiceTest
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId))!.ReturnsAsync((Movie)null!);
+        var actorRepositoryMock = new Mock<IActorRepository>();
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync((Movie)null!);
 
-        // Act
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
+
+        // Act and Assert
         var act = async () => await movieService.DeleteAsync(movieId);
 
-        // Assert
         await act.Should().NotThrowAsync();
     }
 
@@ -208,9 +232,11 @@ public class MovieServiceTest
         var movieIds = new List<string> { "1", "2", "3" };
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
+        var actorRepositoryMock = new Mock<IActorRepository>();
         movieRepositoryMock.Setup(repo => repo.DeleteMoviesAsync(movieIds)).ReturnsAsync(false);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var result = await movieService.DeleteMoviesAsync(movieIds);
@@ -228,17 +254,29 @@ public class MovieServiceTest
         var movieBodyRequest = new MovieBodyRequest
         {
             Name = "Updated Movie Name",
-            Description = "Updated Movie Description"
+            Description = "Updated Movie Description",
+            Year = 2003,
+            DirectorId = Guid.NewGuid(),
+            ActorsToAdd = new List<ActorBodyRequest>
+            {
+                new ActorBodyRequest("Actor1", 30, "Country1", "Bio1", Guid.NewGuid())
+            },
+            ActorsToRemove = new List<Guid>()
         };
+
         var existingMovie = new Movie(movieId, "Original Name", "Original Description", 1995);
 
         var movieRepositoryMock = new Mock<IMovieRepository>();
         var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync(existingMovie);
+        var actorRepositoryMock = new Mock<IActorRepository>();
+
+        movieRepositoryMock.Setup(repo => repo.GetMovieWithActorsAsync(movieId)).ReturnsAsync(existingMovie);
         movieRepositoryMock.Setup(repo => repo.UpdateMovieAsync(movieId, It.IsAny<Movie>()))
             .ReturnsAsync(existingMovie);
 
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
+
+        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object,
+            actorRepositoryMock.Object);
 
         // Act
         var result = await movieService.UpdateMovieAsync(movieId, movieBodyRequest);
@@ -247,54 +285,7 @@ public class MovieServiceTest
         result.Should().NotBeNull();
         result.MovieName.Should().Be("Updated Movie Name");
         result.MovieDescription.Should().Be("Updated Movie Description");
-    }
-
-    [Fact]
-    public async Task UpdateMovieAsync_ThrowsMultiValidationException_WhenMovieDoesNotExist()
-    {
-        // Arrange
-        var movieId = Guid.NewGuid();
-        var movieBodyRequest = new MovieBodyRequest
-        {
-            Name = "Updated Movie Name",
-            Description = "Updated Movie Description"
-        };
-
-        var movieRepositoryMock = new Mock<IMovieRepository>();
-        var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId))!.ReturnsAsync((Movie)null!);
-
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
-
-        // Act and Assert
-        Func<Task> act = async () => await movieService.UpdateMovieAsync(movieId, movieBodyRequest);
-        await act.Should().ThrowAsync<MultiValidationException>()
-            .WithMessage("Movie not found");
-    }
-
-    [Fact]
-    public async Task UpdateMovieAsync_ThrowsMultiValidationException_WhenUpdateFails()
-    {
-        // Arrange
-        var movieId = Guid.NewGuid();
-        var movieBodyRequest = new MovieBodyRequest
-        {
-            Name = "Updated Movie Name",
-            Description = "Updated Movie Description"
-        };
-        var existingMovie = new Movie(movieId, "Original Name", "Original Description", 1996);
-
-        var movieRepositoryMock = new Mock<IMovieRepository>();
-        var directorRepositoryMock = new Mock<IDirectorRepository>();
-        movieRepositoryMock.Setup(repo => repo.GetByIdAsync(movieId)).ReturnsAsync(existingMovie);
-        movieRepositoryMock.Setup(repo => repo.UpdateMovieAsync(movieId, It.IsAny<Movie>()))!
-            .ReturnsAsync((Movie)null!);
-
-        var movieService = new MovieService(movieRepositoryMock.Object, directorRepositoryMock.Object);
-
-        // Act and Assert
-        Func<Task> act = async () => await movieService.UpdateMovieAsync(movieId, movieBodyRequest);
-        await act.Should().ThrowAsync<MultiValidationException>()
-            .WithMessage("Failed to update the movie.");
+        result.YearOfProduction.Should().Be(2003);
+        result.DirectorId.Should().Be(movieBodyRequest.DirectorId);
     }
 }

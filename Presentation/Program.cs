@@ -1,6 +1,7 @@
 using ClassLibrary1.RepositoryInterfaces;
 using ClassLibrary1.ServiceImplementation;
 using ClassLibrary1.ServiceInterface;
+using Infrastructure.ActorRepositoryImplementation;
 using Infrastructure.DataContext;
 using Infrastructure.DirectorRepositoryImplementation;
 using Infrastructure.MovieRepositoryImplementation;
@@ -19,8 +20,10 @@ builder.Services.AddDbContext<DataAppContext>(opt =>
     opt.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<IMovieService, MovieService>();
 builder.Services.AddScoped<IDirectorService, DirectorService>();
+builder.Services.AddScoped<IActorService, ActorService>();
 builder.Services.AddTransient<IMovieRepository, MovieRepository>();
 builder.Services.AddTransient<IDirectorRepository, DirectorRepository>();
+builder.Services.AddTransient<IActorRepository, ActorRepository>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
